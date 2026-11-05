@@ -8,7 +8,7 @@ SERVICE="${SERVICE:-market-risk-assistant}"
 
 gcloud config set project "$PROJECT_ID"
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
-  aiplatform.googleapis.com logging.googleapis.com bigquery.googleapis.com
+  aiplatform.googleapis.com logging.googleapis.com
 
 gcloud run deploy "$SERVICE" \
   --source . \

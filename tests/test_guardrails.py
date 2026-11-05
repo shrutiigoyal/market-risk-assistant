@@ -20,7 +20,8 @@ class InputGuardrails(unittest.TestCase):
 
     def test_allows_domain_questions(self):
         for q in ["What is the Volcker Rule?", "Compute 99% VaR for a $5M portfolio",
-                  "Show positions for the rates desk", "hello"]:
+                  "Show positions for the rates desk", "hello",
+                  "Which asset contributes most to risk?", "Backtest my GARCH volatility forecast"]:
             self.assertTrue(check_input(q).allowed, q)
 
     def test_rejects_empty_and_too_long(self):

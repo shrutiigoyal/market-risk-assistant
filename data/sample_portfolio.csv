@@ -1,0 +1,5 @@
+asset,asset_class,weight,market_value
+NIFTY50,Equity,0.4,400000
+GOVT_BOND,Bonds,0.3,300000
+GOLD,Commodity,0.2,200000
+USD_INR,FX,0.1,100000
