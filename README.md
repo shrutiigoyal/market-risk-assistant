@@ -1,97 +1,110 @@
-# Market Risk Assistant
+# Quant Risk Copilot
 
-A chatbot for market-risk questions: VaR, the Volcker Rule, and desk positions and P&L.
-It is built with **Google ADK** and **Gemini**, and served through a **FastAPI** endpoint.
+A multi-asset **portfolio risk engine** with an AI assistant on top. You ask "which asset drives my risk?"
+or "did my VaR model pass backtesting?"; Gemini (via Google ADK) picks the right tool and explains the answer.
 
-The important design choice: **numbers come from Python code, not from the AI.**
-The AI decides which tool to call and explains the result. It never makes up a figure.
+**The design rule: Python computes, the LLM explains.** Every number comes from a tested NumPy/SciPy engine in
+`app/portfolio/`. Agents never calculate or invent figures.
 
-> All data is synthetic. Answers are for learning only, not investment or compliance advice.
+> All data is synthetic. Educational only, not investment advice.
 
-## How it works
+## What it does
+
+| Area | Implementation |
+|---|---|
+| Portfolio | Weighted returns, covariance/correlation, annualised volatility, long-only validation |
+| Risk measures | Historical and parametric (normal) VaR, Expected Shortfall, sqrt-time horizon scaling (labelled approximation) |
+| Risk attribution | Euler decomposition of volatility, diversification ratio, weight HHI |
+| Volatility | EWMA (past-only, no look-ahead) and GARCH(1,1) fitted by Gaussian MLE (own SciPy implementation, cross-checked vs `arch` when installed) |
+| Validation | Rolling-window out-of-sample VaR backtests: Kupiec POF, Christoffersen independence, conditional coverage, Basel traffic light |
+| Stress testing | Equity crash, inflation shock, rally, global risk-off |
+| Agents | Router + Portfolio, Quant Risk, Research and Explanation analysts (Google ADK) |
+| Safety | Input/output guardrails: prompt-injection, off-topic, PII masking, prompt-leak checks |
 
 ```mermaid
 flowchart LR
-    U[User question] --> IG{Input guardrails}
-    IG -- blocked --> B[Polite refusal]
-    IG -- ok --> R[Router agent]
-    R --> V[VaR agent]
-    R --> Q[Regulatory agent]
-    R --> D[Data agent]
-    V --> T1[compute_var]
-    Q --> T2[regulatory_lookup]
-    D --> T3[lookup_positions]
-    T1 --> OG{Output guardrails}
-    T2 --> OG
-    T3 --> OG
-    OG --> A[Answer]
+    U[Question] --> G{Input guardrails} --> R[Router]
+    R --> P[Portfolio analyst] & Q[Quant risk analyst] & X[Explanation analyst] & S[Research analyst]
+    P & Q & X & S --> T[Tools: app/portfolio/service.py]
+    T --> E[(Quant engine: NumPy / SciPy)]
+    P & Q & X & S --> O{Output guardrails} --> A[Answer]
 ```
 
-| Agent | What it does | Tool it uses |
+## Example output (bundled synthetic data, 756 days, 1,000,000 portfolio)
+
+Portfolio: 40% NIFTY50, 30% GOVT_BOND, 20% GOLD, 10% USD_INR. Annualised volatility **6.5%**.
+
+| Asset | Capital weight | Share of risk |
 |---|---|---|
-| Router | Reads the question and passes it to the right agent | none |
-| VaR agent | Value at Risk and Expected Shortfall for a portfolio | `compute_var` |
-| Regulatory agent | Short notes on Volcker Rule, Basel/FRTB, backtesting | `regulatory_lookup` |
-| Data agent | Positions and P&L for a desk (rates, credit, equities, fx) | `lookup_positions` |
+| NIFTY50 | 40% | **74.3%** |
+| GOLD | 20% | 20.7% |
+| GOVT_BOND | 30% | 3.0% |
+| USD_INR | 10% | 2.0% |
 
-## Guardrails
-
-| When | Check | What happens |
+| 99%, 1-day | VaR | Expected Shortfall |
 |---|---|---|
-| Before the AI | Prompt injection ("ignore previous instructions") | Blocked |
-| Before the AI | Question not about market risk | Blocked |
-| Before the AI | Emails, PAN, Aadhaar, card numbers | Masked |
-| After the AI | Personal data in the answer | Masked |
-| After the AI | Answer reveals internal agent names | Blocked |
+| Historical | 12,624 (1.26%) | 19,466 (1.95%) |
+| Parametric | 9,586 (0.96%) | 10,983 (1.10%) |
 
-These are simple pattern checks, a good first layer rather than a full defence.
+Parametric understates tail risk here because the data are fat-tailed (Student-t shocks, volatility clustering).
+Backtests agree (250-day rolling window, 99%):
 
-## Logging and errors
+| Model | Exceptions (expected 5.1) | Kupiec p | Christoffersen p | Basel zone |
+|---|---|---|---|---|
+| Historical | 8 | 0.23 | 0.004 | yellow |
+| EWMA | 9 | 0.11 | 0.007 | yellow |
+| Parametric | 12 | 0.008 | 0.002 | red |
 
-- Each request writes one JSON log line: how long it took, tokens used, which agents ran, and any error.
-- If Gemini returns a temporary error (503 "high demand"), the app waits and retries up to 3 times.
+No model passes both tests: exceptions cluster in the volatility regime, which is exactly what the independence test
+is for. GARCH(1,1) fit: alpha 0.105, beta 0.818, persistence 0.924, converged.
+Stress: equity crash costs -53,000 (-5.3%), the worst of the four scenarios.
 
-## Run it (Windows PowerShell)
+## Run it
 
-You need Python 3.10+ and a free Gemini API key from https://aistudio.google.com/apikey
+Python 3.10+, free Gemini key from https://aistudio.google.com/apikey
 
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
+```bash
+python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+python -m pytest -q                                    # engine tests, no API key needed
 
-$env:GOOGLE_GENAI_USE_VERTEXAI="FALSE"
-$env:GOOGLE_API_KEY="your-key-here"
+export GOOGLE_GENAI_USE_VERTEXAI=FALSE GOOGLE_API_KEY=your-key   # PowerShell: $env:NAME="value"
 uvicorn app.main:app --reload --port 8080
+curl -X POST localhost:8080/chat -H 'content-type: application/json' \
+     -d '{"message":"Which asset contributes most to my portfolio risk?"}'
 ```
 
-In a second window:
+Use the engine without the AI:
 
-```powershell
-Invoke-RestMethod -Method Post -Uri http://localhost:8080/chat -ContentType "application/json" -Body '{"message":"Compute 99% VaR for a 5000000 portfolio"}'
+```python
+from app.portfolio import service
+service.calculate_var(0.99, 1, "both")
+service.backtest_var(0.99, 250, "ewma")
 ```
 
-Mac/Linux users: activate with `source .venv/bin/activate` and set the variables with `export`.
+Your own data: set `PORTFOLIO_CSV` (`asset,asset_class,market_value`) and `ASSET_RETURNS_CSV`
+(`date` + one daily-return column per asset). Regenerate sample data with `python data/generate_sample_data.py`.
 
-Model names change over time. The default is set in `app/agent.py` (or set `MODEL`).
-`python check_models.py` lists the models your key can use.
+Sample questions: *What is my allocation? Which asset contributes most to risk? Calculate 99% VaR and ES.
+Compare GARCH and EWMA forecasts. Did my VaR model pass backtesting? Why might my VaR be rising? What does Expected Shortfall mean?*
 
-## Tests
+## Assumptions and limitations
 
-```powershell
-python -m unittest discover -s tests -t . -v
+- Long-only, constant weights, one-day returns; multi-day risk uses square-root-of-time (i.i.d. approximation).
+- Parametric VaR assumes normal returns; understates fat tails (see backtest above).
+- GARCH uses Gaussian quasi-likelihood and a constant mean; sample covariance is estimated over the full window.
+- Stress shocks are hypothetical instantaneous moves in position value.
+- Guardrails are pattern checks, a first layer rather than a full defence.
+- Synthetic data: results show the method, not real market behaviour.
+
+## Layout
+
+```
+app/portfolio/   portfolio_engine, risk_metrics, risk_attribution, volatility_models, backtesting,
+                 stress_testing, service (agent tools)
+app/agents/      portfolio / quant / research / explanation agents
+app/agent.py     router      app/main.py FastAPI + retry + JSON logs      app/guardrails.py
+tests/           64 tests: engine maths, hand-computed examples, no-look-ahead, tools, guardrails
 ```
 
-## Project layout
-
-```
-app/
-  main.py          FastAPI endpoint, retry, logging
-  agent.py         router agent and the 3 specialist agents
-  risk_tools.py    VaR / Expected Shortfall maths, positions lookup, regulatory notes
-  guardrails.py    input and output checks
-  observability.py JSON log helpers
-data/              synthetic returns and positions
-tests/             unit tests for guardrails and risk maths
-check_models.py    lists Gemini models available to your key
-```
+Not built yet: Streamlit dashboard, document RAG over Basel/FRTB papers.

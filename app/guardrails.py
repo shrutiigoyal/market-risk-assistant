@@ -77,6 +77,9 @@ ALLOWED_TOPIC_KEYWORDS = {
     "backtest", "backtesting", "exposure", "volatility", "confidence", "horizon", "underwriting",
     "market-making", "market making", "proprietary", "liquidity", "limit", "limits", "rates",
     "credit", "equities", "fx", "capital", "dodd-frank", "dodd frank", "metrics",
+    "garch", "ewma", "kupiec", "christoffersen", "allocation", "contribute", "contribution", "correlation",
+    "diversification", "concentration", "concentrated", "scenario", "shortfall", "asset", "assets", "equity",
+    "bond", "bonds", "gold", "forecast", "drawdown", "sharpe", "weights",
 }
 _GREETING = re.compile(r"^\s*(hi|hello|hey|thanks|thank you|help|what can you do)\b", re.I)
 
@@ -120,7 +123,8 @@ def check_input(text: str) -> GuardrailResult:
     return GuardrailResult(True, masked, [], pii)
 
 
-SYSTEM_PROMPT_MARKERS = ("risk_router", "sub_agents", "transfer_to_agent", "system prompt")
+SYSTEM_PROMPT_MARKERS = ("risk_router", "sub_agents", "transfer_to_agent", "system prompt",
+                         "portfolio_analyst", "quant_risk_analyst", "research_analyst", "explanation_analyst")
 
 
 def check_output(text: str) -> GuardrailResult:
