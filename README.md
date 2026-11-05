@@ -107,4 +107,4 @@ app/agent.py     router      app/main.py FastAPI + retry + JSON logs      app/gu
 tests/           64 tests: engine maths, hand-computed examples, no-look-ahead, tools, guardrails
 ```
 
-Not built yet: Streamlit dashboard, document RAG over Basel/FRTB papers.
+
