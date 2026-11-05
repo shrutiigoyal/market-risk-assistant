@@ -1,4 +1,4 @@
-"""Multi-agent graph built with Google ADK.
+﻿"""Multi-agent graph built with Google ADK.
 
 risk_router (root)  -- delegates by intent -->  var_explainer   (compute_var)
                                             -->  regulatory_qa   (regulatory_lookup)
@@ -10,7 +10,7 @@ from google.adk.agents import Agent
 
 from app.risk_tools import compute_var, lookup_positions, regulatory_lookup
 
-MODEL = os.getenv("MODEL", "gemini-2.5-flash")
+MODEL = os.getenv("MODEL", "gemini-3.1-flash-lite")
 
 COMMON_RULES = (
     "Rules: use tool results for every number and never invent figures. "
