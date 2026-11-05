@@ -13,7 +13,7 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregi
 gcloud run deploy "$SERVICE" \
   --source . \
   --region "$REGION" \
-  --set-env-vars "GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=$REGION,MODEL=${MODEL:-gemini-2.5-flash}" \
+  --set-env-vars "GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=$REGION,MODEL=${MODEL:-gemini-3.1-flash-lite}" \
   --memory 512Mi --cpu 1 --max-instances 3 --timeout 120 \
   --no-allow-unauthenticated   # LLM endpoints cost money: require IAM auth
 

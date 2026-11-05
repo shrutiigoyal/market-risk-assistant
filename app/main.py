@@ -11,6 +11,7 @@ import uuid
 from fastapi import FastAPI, HTTPException, Request
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel, Field
 
@@ -61,6 +62,20 @@ async def run_agent(user_id: str, session_id: str, text: str) -> tuple[str, dict
                         "agents": agents_used}
 
 
+async def run_agent_with_retry(user_id: str, session_id: str, text: str):
+    delay = 2
+    for attempt in range(4):
+        try:
+            return await run_agent(user_id, session_id, text)
+        except genai_errors.ServerError as exc:  # 5xx such as 503 high demand
+            if attempt == 3:
+                raise
+            log_event(logger, "agent_retry", logging.WARNING, session_id=session_id,
+                      attempt=attempt + 1, error=str(exc)[:120])
+            await asyncio.sleep(delay)
+            delay *= 2
+
+
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
@@ -82,7 +97,7 @@ async def chat(req: ChatRequest, request: Request):
         return ChatResponse(reply=gi.user_message, session_id=session_id, blocked=True, latency_ms=ms())
 
     try:
-        text, usage = await asyncio.wait_for(run_agent(req.user_id, session_id, gi.text), AGENT_TIMEOUT_S)
+        text, usage = await asyncio.wait_for(run_agent_with_retry(req.user_id, session_id, gi.text), AGENT_TIMEOUT_S)
     except Exception as exc:
         log_event(logger, "agent_error", logging.ERROR, trace_id=trace, session_id=session_id,
                   error_type=type(exc).__name__, error=str(exc)[:300], latency_ms=ms())
